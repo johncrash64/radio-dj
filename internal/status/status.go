@@ -63,6 +63,7 @@ type Server struct {
 	icListeners int
 	icCacheT   time.Time
 	subs       map[chan NowPlaying]struct{} // SSE subscribers for /events
+	language   string                       // dashboard default UI language ("es"|"en")
 }
 
 func New(stateDir string, needsSetup bool) *Server {
@@ -164,6 +165,25 @@ func (s *Server) Current() NowPlaying {
 		go s.refreshListeners()
 	}
 	return np
+}
+
+// SetLanguage sets the dashboard's default UI language ("es" or "en"), used
+// when the client doesn't override it via ?lang=. Anything else falls back
+// to "es".
+func (s *Server) SetLanguage(lang string) {
+	if lang != "en" {
+		lang = "es"
+	}
+	s.mu.Lock()
+	s.language = lang
+	s.mu.Unlock()
+}
+
+// Language returns the dashboard's default UI language.
+func (s *Server) Language() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.language
 }
 
 // SetIcecast enables listener counting by pointing at the icecast admin API.
@@ -417,7 +437,7 @@ func (s *Server) ListenAndServeHTTP(port int) {
 			http.Redirect(w, r, "/onboarding", http.StatusSeeOther)
 			return
 		}
-		serveIndex(w)
+		serveIndex(w, s.Language())
 	})
 	go func() {
 		if err := http.ListenAndServe(":"+strconv.Itoa(port), mux); err != nil {

@@ -40,9 +40,15 @@ var appleTouchIcon []byte
 
 var indexTmpl = template.Must(template.New("index").Parse(indexHTML))
 
-func serveIndex(w http.ResponseWriter) {
+// indexData is the template context for index.html: only the server-default
+// UI language, which the client may still override via ?lang=.
+type indexData struct {
+	Lang string
+}
+
+func serveIndex(w http.ResponseWriter, lang string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = indexTmpl.Execute(w, nil)
+	_ = indexTmpl.Execute(w, indexData{Lang: lang})
 }
 
 // serveFont serves the self-hosted Permanent Marker woff2 (30KB) with a

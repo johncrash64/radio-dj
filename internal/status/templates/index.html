@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="{{.Lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -216,7 +216,7 @@
     <div class="cass-wrap">
       <div class="flipper" id="flipper">
         <!-- Casete a escala real: 100 x 64 mm  ->  400 x 256 u  (1 mm = 4 u) -->
-        <svg class="cass" viewBox="0 0 400 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Casete en reproducción">
+        <svg class="cass" id="cass-svg" viewBox="0 0 400 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Casete en reproducción">
           <defs>
 
             <!-- rollo de cinta: r 48 (vacío) … 90 (lleno) -->
@@ -345,7 +345,7 @@
             <g id="next-label" transform="rotate(.5 200 222)">
               <rect class="paper-label" x="96" y="208" width="208" height="24" rx="2" stroke="#d9cba6" stroke-width=".8"/>
               <rect x="96" y="208" width="208" height="24" rx="2" fill="none" stroke="#000" stroke-width=".6" opacity=".05"/>
-              <text font-size="8" fill="#9a7b3e" x="104" y="217" letter-spacing=".5">SIGUIENTE ▸</text>
+              <text font-size="8" fill="#9a7b3e" x="104" y="217" letter-spacing=".5" id="next-tag">SIGUIENTE ▸</text>
               <text font-size="11" fill="#2b2118" x="104" y="229" id="paper-next">—</text>
             </g>
 
@@ -397,9 +397,9 @@
     </div>
 
     <div class="tab-bar">
-      <button class="tab active" data-tab="history">Sonó antes</button>
-      <button class="tab" data-tab="djlog">Locutor</button>
-      <button class="tab" data-tab="reqs">Pedidos<span class="badge" id="req-badge" hidden>0</span></button>
+      <button class="tab active" data-tab="history"><span id="tab-label-history">Sonó antes</span></button>
+      <button class="tab" data-tab="djlog"><span id="tab-label-djlog">Locutor</span></button>
+      <button class="tab" data-tab="reqs"><span id="tab-label-reqs">Pedidos</span><span class="badge" id="req-badge" hidden>0</span></button>
     </div>
     <div class="blk tab-panel">
       <div class="tab-body" id="tab-history">
@@ -414,13 +414,13 @@
     </div>
 
     <div class="blk ask" id="ask" hidden>
-      <div class="ask-rec"><span class="rec-dot"></span> Grabando pedido — RDJ-0001</div>
+      <div class="ask-rec"><span class="rec-dot"></span><span id="ask-rec-label">Grabando pedido — RDJ-0001</span></div>
       <form id="form">
         <input id="q-from" placeholder="Tu nombre (opcional)" autocomplete="off" maxlength="20">
         <input id="q" placeholder="¿Qué querés escuchar y para quién?" autocomplete="off">
-        <button type="submit">Enviar</button>
+        <button type="submit" id="ask-submit">Enviar</button>
       </form>
-      <div class="h">Dejá tu mensaje al aire · entra en la próxima tanda</div>
+      <div class="h" id="ask-help">Dejá tu mensaje al aire · entra en la próxima tanda</div>
     </div>
   </div>
 
@@ -435,18 +435,58 @@
   const $ = id => document.getElementById(id);
   const deck = $('deck');
 
+  // ── i18n: ?lang= query param > server default (RDJ_LANGUAGE) > es ──
+  const STRINGS = {
+    es: {
+      tabHistory: 'Sonó antes', tabDjlog: 'Locutor', tabReqs: 'Pedidos',
+      noHistory: 'Todavía no sonó nada…', noDjLog: 'Todavía no habló el locutor…', noRequests: 'Sin pedidos aún',
+      askRec: 'Grabando pedido — RDJ-0001', namePlaceholder: 'Tu nombre (opcional)',
+      reqPlaceholder: '¿Qué querés escuchar y para quién?', submit: 'Enviar',
+      askHelp: 'Dejá tu mensaje al aire · entra en la próxima tanda', sentConfirm: '✔ Grabado y enviado al locutor',
+      playing: 'Sonando', connecting: 'Conecta…', next: 'SIGUIENTE ▸',
+      ariaFfwd: 'Avance rápido', ariaRew: 'Rebobinar', ariaRec: 'Grabar pedido', ariaCass: 'Casete en reproducción',
+    },
+    en: {
+      tabHistory: 'Played', tabDjlog: 'DJ', tabReqs: 'Requests',
+      noHistory: 'Nothing played yet…', noDjLog: "The DJ hasn't spoken yet…", noRequests: 'No requests yet',
+      askRec: 'Recording request — RDJ-0001', namePlaceholder: 'Your name (optional)',
+      reqPlaceholder: 'What do you want to hear, and for whom?', submit: 'Send',
+      askHelp: 'Leave your message on air · goes out next batch', sentConfirm: '✔ Recorded and sent to the DJ',
+      playing: 'Playing', connecting: 'Connecting…', next: 'NEXT ▸',
+      ariaFfwd: 'Fast forward', ariaRew: 'Rewind', ariaRec: 'Record request', ariaCass: 'Cassette playing',
+    },
+  };
+  const SERVER_LANG = '{{.Lang}}';
+  const qLang = new URLSearchParams(location.search).get('lang');
+  const LANG = (qLang === 'en' || qLang === 'es') ? qLang : (SERVER_LANG === 'en' ? 'en' : 'es');
+  document.documentElement.lang = LANG;
+  const T = STRINGS[LANG];
+
   const kPlay = $('k-play'), kStop = $('k-stop'), kRec = $('k-rec'), kFfwd = $('k-ffwd'), kRew = $('k-rew');
+  $('tab-label-history').textContent = T.tabHistory;
+  $('tab-label-djlog').textContent = T.tabDjlog;
+  $('tab-label-reqs').textContent = T.tabReqs;
+  $('ask-rec-label').textContent = T.askRec;
+  $('q-from').placeholder = T.namePlaceholder;
+  $('q').placeholder = T.reqPlaceholder;
+  $('ask-submit').textContent = T.submit;
+  $('ask-help').textContent = T.askHelp;
+  $('next-tag').textContent = T.next;
+  kFfwd.setAttribute('aria-label', T.ariaFfwd);
+  kRew.setAttribute('aria-label', T.ariaRew);
+  kRec.setAttribute('aria-label', T.ariaRec);
+  $('cass-svg').setAttribute('aria-label', T.ariaCass);
 
   let audioState = 'idle';
   function setAudioState(s){
     audioState = s;
     if(s === 'playing'){
-      $('play-ico').textContent = '▶'; $('play-txt').textContent = 'Sonando';
+      $('play-ico').textContent = '▶'; $('play-txt').textContent = T.playing;
       kPlay.classList.add('down'); kPlay.classList.remove('connecting');
       deck.classList.add('playing');
     } else if(s === 'connecting'){
       $('play-ico').innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
-      $('play-txt').textContent = 'Conecta…';
+      $('play-txt').textContent = T.connecting;
       kPlay.classList.add('down','connecting');
       deck.classList.remove('playing');
     } else {
@@ -527,7 +567,7 @@
     $('q').value=''; $('q-from').value='';
     try{ await fetch('/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from, text:q})}); refresh(); refreshDJLog(); }catch(_){}
     const h = $('ask').querySelector('.h'); const prev = h.textContent;
-    h.textContent = '✔ Grabado y enviado al locutor';
+    h.textContent = T.sentConfirm;
     setTimeout(()=>{ h.textContent = prev; setRec(false); }, 1400);
   });
 
@@ -572,7 +612,7 @@
           const who = r.from ? '<b>'+esc(r.from)+'</b>: ' : '';
           return '<li>'+who+esc(r.text)+'</li>';
         }).join('')
-      : '<li class="empty">Sin pedidos aún</li>';
+      : `<li class="empty">${T.noRequests}</li>`;
     const rb = $('req-badge'); rb.hidden = rs.length===0; rb.textContent = rs.length;
 
     startedAt = j.startedAt ? Date.parse(j.startedAt) : null;
@@ -585,7 +625,7 @@
     const h = j.history||[];
     $('history-list').innerHTML = h.length
       ? h.slice(0,8).map(t=>'<li>'+esc(t.title)+(t.artist?(' — '+esc(t.artist)):'')+'</li>').join('')
-      : '<li class="empty">Todavía no sonó nada…</li>';
+      : `<li class="empty">${T.noHistory}</li>`;
 
     if(c.title && c.title !== coverTitle){ coverTitle = c.title; loadCover(); }
     updateMediaMeta();
@@ -601,7 +641,7 @@
       const txt = await fetch('/dj-log').then(r=>r.text());
       const lines = txt.trim().split('\n').filter(Boolean);
       const pre = $('djlog-body');
-      if(!lines.length){ pre.innerHTML = '<span class="empty">Todavía no habló el locutor…</span>'; return; }
+      if(!lines.length){ pre.innerHTML = `<span class="empty">${T.noDjLog}</span>`; return; }
       pre.innerHTML = lines.reverse().slice(0,120).map(ln=>{
         const m = ln.match(/^(\d\d:\d\d:\d\d)\s*\[(DJ|PEDIDO|HORA)\]\s*(.*)$/);
         if(!m) return esc(ln);

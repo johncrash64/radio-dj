@@ -63,6 +63,7 @@ func Serve(cfg config.Config) error {
 		return fmt.Errorf("library: %w", err)
 	}
 	st := status.New(cfg.StateDir, cfg.NeedsSetup())
+	st.SetLanguage(cfg.Language) // dashboard default UI language, overridable via ?lang=
 	djLogPath = filepath.Join(cfg.StateDir, "dj-log.txt") // /dj-log tails this for feedback
 	st.ListenAndServeHTTP(cfg.StatusPort)
 	log.Printf("[radio-dj] UI :%d · stream :%d/stream.mp3 · POST /request", cfg.StatusPort, cfg.IcecastPort)
