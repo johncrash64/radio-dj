@@ -58,13 +58,16 @@ func (s *Server) serveIndex(w http.ResponseWriter) {
 	data := struct {
 		Lang                                                  string
 		Next, TabHistory, TabDJ, TabRequests, Recording, Send string
+		Previous, Skip                                        string
 		PhName, PhRequest, Hint                               string
 		AriaCassette, AriaFfwd, AriaRew, AriaRec              string
 		StreamPath                                            string
 		I18n                                                  map[string]string
 	}{
 		Lang:         s.lang,
+		Previous:     p.Get("ui_previous"),
 		Next:         p.Get("ui_next"),
+		Skip:         p.Get("ui_skip"),
 		TabHistory:   p.Get("ui_tab_history"),
 		TabDJ:        p.Get("ui_tab_djlog"),
 		TabRequests:  p.Get("ui_tab_requests"),

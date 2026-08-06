@@ -57,6 +57,7 @@ type Server struct {
 	dir        string
 	requests   []Request // raw, unresolved
 	needsSetup bool
+	controlHandler func(string) bool // radio-loop skip callback (POST /control); nil = no radio
 	lang       string // config.Language ("es"|"en") — drives the index UI strings
 	mount      string // icecast mount (e.g. /stream.aac) — drives reverse proxy + <audio> src
 	// icecast admin API for listener counts (lazy, cached 3s)
@@ -75,6 +76,22 @@ func New(stateDir string, needsSetup bool, mount string) *Server {
 // SetLanguage stores the UI language for the index template strings.
 func (s *Server) SetLanguage(lang string) {
 	s.lang = lang
+}
+
+// SetControlHandler wires the radio loop's skip callback. POST /control
+// forwards "previous"/"next" here; the handler kills the in-flight decoder
+// and advances to the chosen track. nil handler → 409 (no track playing).
+func (s *Server) SetControlHandler(h func(string) bool) {
+	s.controlHandler = h
+}
+
+// requestControl forwards a control action to the radio loop. Returns whether
+// a track was on air (accepted).
+func (s *Server) requestControl(action string) bool {
+	if s.controlHandler == nil {
+		return false
+	}
+	return s.controlHandler(action)
 }
 
 // SetCurrent publishes the current + next track (called by the radio loop as
@@ -350,6 +367,34 @@ func (s *Server) ListenAndServeHTTP(port int) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		_ = json.NewEncoder(w).Encode(req)
+	})
+	// /control — skip/previous for the live broadcast. The handler kills the
+	// in-flight music decoder (listeners stay connected); the radio loop then
+	// advances to the next or previous track. 409 when nothing is on air.
+	mux.HandleFunc("/control", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Action string `json:"action"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil ||
+			(body.Action != "previous" && body.Action != "next") {
+			http.Error(w, `{"error":"action must be 'previous' or 'next'"}`, http.StatusBadRequest)
+			return
+		}
+		if !s.requestControl(body.Action) {
+			writeJSON(w, http.StatusConflict, `{"error":"no track playing"}`)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, `{"ok":true}`)
 	})
 	mux.HandleFunc("/onboarding", func(w http.ResponseWriter, r *http.Request) {
 		// Once configured, the wizard closes — /onboarding redirects to the

@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"radio-dj/internal/config"
@@ -107,6 +108,31 @@ func Serve(cfg config.Config) error {
 		return fmt.Errorf("open streamer: %w", err)
 	}
 	defer streamer.Close()
+	// controls: skip/previous from the player UI. Buffered(1) so rapid clicks
+	// coalesce into one pending action; the loop drains it after Play returns.
+	controls := make(chan string, 1)
+	var controlMu sync.Mutex
+	takeControl := func() string {
+		controlMu.Lock()
+		defer controlMu.Unlock()
+		select {
+		case action := <-controls:
+			return action
+		default:
+			return ""
+		}
+	}
+	st.SetControlHandler(func(action string) bool {
+		controlMu.Lock()
+		defer controlMu.Unlock()
+		// SkipCurrent kills the in-flight decoder immediately; reject if no
+		// decoder is active (between songs) or a skip is already pending.
+		if len(controls) > 0 || !streamer.SkipCurrent() {
+			return false
+		}
+		controls <- action
+		return true
+	})
 	st.MarkPlaying(true)
 	log.Printf("[radio-dj] source persistente ON AIR ✓")
 
@@ -127,6 +153,7 @@ func Serve(cfg config.Config) error {
 	}()
 
 	// Consumer: play each tanda as it arrives; the next is already being built.
+	var previousTrack *Segment
 	tandaN := 0
 	for segs := range prepared {
 		tandaN++
@@ -150,6 +177,7 @@ func Serve(cfg config.Config) error {
 				}
 				continue
 			}
+		playCurrent:
 			st.SetCurrent(toStatus(seg.Meta), toStatus(nextTrack(segs, i)))
 			log.Printf("▶ %s — %s", seg.Meta.Title, seg.Meta.Artist)
 			if seg.Req != "" {
@@ -204,9 +232,23 @@ func Serve(cfg config.Config) error {
 					}
 				}()
 			}
-			if perr := streamer.Play(seg.Path); perr != nil {
+			perr := streamer.Play(seg.Path)
+			control := takeControl()
+			if perr != nil && control == "" {
 				log.Printf("[radio-dj] segment error: %v", perr)
 			}
+			if control == "previous" && previousTrack != nil {
+				prev := *previousTrack
+				log.Printf("[radio-dj] ◀ replay %s — %s", prev.Meta.Title, prev.Meta.Artist)
+				st.SetCurrent(toStatus(prev.Meta), toStatus(seg.Meta))
+				_ = streamer.Play(prev.Path)
+				// a "next" while replaying the previous track returns to the
+				// interrupted current track; discard that consumed command.
+				_ = takeControl()
+				goto playCurrent
+			}
+			played := seg
+			previousTrack = &played
 			if !streamer.Alive() {
 				log.Printf("[radio-dj] master caído — reabriendo source")
 				streamer.Close()

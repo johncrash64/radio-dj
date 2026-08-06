@@ -42,6 +42,25 @@ Content-Type: application/json
 → 200  { "text": "play some Bowie", "askedAt": "...", "status": "queued" }
 ```
 
+### `POST /control`
+Skip or replay the current track on the live broadcast. The in-flight music
+decoder is killed (listeners stay connected — only the decoder stops feeding
+PCM, the master Icecast source keeps running); the radio loop then advances to
+the next track (`next`) or replays the previous one (`previous`).
+
+```
+POST /control
+Content-Type: application/json
+{ "action": "next" }          // or "previous"
+
+→ 202 {"ok":true}             // accepted, decoder killed, loop advances
+→ 409 {"error":"no track playing"}  // nothing on air (between songs)
+→ 400 {"error":"action must be 'previous' or 'next'"}
+```
+
+Rapid clicks coalesce into one pending action (the channel is buffered to 1).
+It's a shared broadcast: the skip changes what **all** listeners hear.
+
 ### `GET /stream.aac`
 The broadcast — an AAC stream (default 192 kbps, 44.1 kHz, stereo). The encoder is
 platform-aware: `aac_at` (Apple AudioToolbox, hardware-accelerated) on macOS,

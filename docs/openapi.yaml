@@ -30,6 +30,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Request' }
+  /control:
+    post:
+      summary: Skip or replay the current track on the live broadcast
+      description: Kills the in-flight music decoder (listeners stay connected); the loop advances to the next or previous track. Shared broadcast — affects all listeners.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [action], properties: { action: { type: string, enum: [previous, next] } } }
+      responses:
+        '202':
+          description: accepted — decoder killed, loop advances
+        '409':
+          description: no track playing (between songs)
   /health:
     get:
       summary: Liveness probe

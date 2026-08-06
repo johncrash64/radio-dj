@@ -381,13 +381,13 @@
             <span class="cap"><span class="ico">■</span><span class="txt">Stop</span><span class="strip"></span></span>
           </button>
           <button class="key k-ffwd" id="k-ffwd" aria-label="{{.AriaFfwd}}">
-            <span class="cap"><span class="ico">◀◀</span><span class="txt">F.Fwd</span><span class="strip"></span></span>
+            <span class="cap"><span class="ico">◀◀</span><span class="txt">{{.Previous}}</span><span class="strip"></span></span>
           </button>
           <button class="key k-play" id="k-play" aria-label="Play">
             <span class="cap"><span class="ico" id="play-ico">▶</span><span class="txt" id="play-txt">Play</span><span class="strip"></span></span>
           </button>
           <button class="key k-rew" id="k-rew" aria-label="{{.AriaRew}}">
-            <span class="cap"><span class="ico">▶▶</span><span class="txt">Rew</span><span class="strip"></span></span>
+            <span class="cap"><span class="ico">▶▶</span><span class="txt">{{.Skip}}</span><span class="strip"></span></span>
           </button>
           <button class="key k-rec" id="k-rec" aria-label="{{.AriaRec}}" aria-pressed="false">
             <span class="cap"><span class="ico">●</span><span class="txt">Rec</span><span class="strip"></span></span>
@@ -482,8 +482,34 @@
     setAudioState('idle'); setRec(false);
   };
   kRec.onclick = ()=> setRec(!kRec.classList.contains('down'));
-  // teclas sin función (de momento): sólo el hundido momentáneo del :active
-  kFfwd.onclick = kRew.onclick = ()=>{};
+  // cassette skip buttons: ◀◀ = previous, ▶▶ = next. Kills the in-flight
+  // decoder server-side (listeners stay connected), then reconnects the <audio>
+  // to the live edge so the user doesn't hear the buffered tail of the old song.
+  async function control(action, button){
+    if(button.disabled) return;
+    button.disabled = true;
+    button.classList.add('down');
+    try{
+      const res = await fetch('/control', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action})
+      });
+      if(!res.ok) throw new Error(await res.text());
+      if(audioState !== 'idle'){
+        await new Promise(resolve=>setTimeout(resolve, 150));
+        audio.pause(); audio.removeAttribute('src'); audio.load();
+        audio.src = '{{.StreamPath}}?t=' + Date.now();
+        setAudioState('connecting');
+        audio.play().catch(()=> setAudioState('idle'));
+      }
+    }catch(err){
+      console.error('radio control failed', err);
+    }finally{
+      setTimeout(()=>{ button.disabled=false; button.classList.remove('down'); }, 900);
+    }
+  }
+  kFfwd.onclick = ()=> control('previous', kFfwd);
+  kRew.onclick = ()=> control('next', kRew);
 
   audio.addEventListener('playing', ()=> setAudioState('playing'));
   audio.addEventListener('pause',   ()=>{ if(audioState!=='idle') setAudioState('idle'); });
