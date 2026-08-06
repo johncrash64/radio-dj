@@ -601,7 +601,7 @@
       const txt = await fetch('/dj-log').then(r=>r.text());
       const lines = txt.trim().split('\n').filter(Boolean);
       const pre = $('djlog-body');
-      if(!lines.length){ pre.innerHTML = '<span class="empty">{{.NoDJLog}}</span>'; return; }
+      if(!lines.length){ pre.innerHTML = '<span class="empty">' + {{ printf "%q" .NoDJLog }} + '</span>'; return; }
       pre.innerHTML = lines.reverse().slice(0,120).map(ln=>{
         const m = ln.match(/^(\d\d:\d\d:\d\d)\s*\[(DJ|PEDIDO|HORA)\]\s*(.*)$/);
         if(!m) return esc(ln);
