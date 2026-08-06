@@ -43,5 +43,8 @@
   "ui_aria_ffwd": "Fast forward",
   "ui_aria_rew": "Rewind",
   "ui_aria_rec": "Record request",
-  "ui_hint": "Leave a message for the air · it plays in the next break"
+  "ui_hint": "Leave a message for the air · it plays in the next break",
+  "log_kind_dj": "DJ",
+  "log_kind_request": "REQUEST",
+  "log_kind_time": "TIME"
 }

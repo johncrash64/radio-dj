@@ -425,9 +425,13 @@
   </div>
 
 <audio id="audio" preload="none"></audio>
+<script type="application/json" id="i18n">{{.I18n}}</script>
 <script>
   // PWA: register service worker for installability + offline app shell.
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  // All UI strings JS needs live in the #i18n JSON island above — never
+  // interpolated into this source, so any translated quote/apostrophe is safe.
+  const T = JSON.parse(document.getElementById('i18n').textContent);
   const audio = document.getElementById('audio');
   // src is (re)assigned on every play so stop() can release it and free the
   // progressive-download buffer WebKit otherwise retains after a long session.
@@ -441,12 +445,12 @@
   function setAudioState(s){
     audioState = s;
     if(s === 'playing'){
-      $('play-ico').textContent = '▶'; $('play-txt').textContent = '{{.Playing}}';
+      $('play-ico').textContent = '▶'; $('play-txt').textContent = T.ui_playing;
       kPlay.classList.add('down'); kPlay.classList.remove('connecting');
       deck.classList.add('playing');
     } else if(s === 'connecting'){
       $('play-ico').innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
-      $('play-txt').textContent = '{{.Connecting}}';
+      $('play-txt').textContent = T.ui_connecting;
       kPlay.classList.add('down','connecting');
       deck.classList.remove('playing');
     } else {
@@ -527,7 +531,7 @@
     $('q').value=''; $('q-from').value='';
     try{ await fetch('/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from, text:q})}); refresh(); refreshDJLog(); }catch(_){}
     const h = $('ask').querySelector('.h'); const prev = h.textContent;
-    h.textContent = '{{.RecordedSent}}';
+    h.textContent = T.ui_recorded_sent;
     setTimeout(()=>{ h.textContent = prev; setRec(false); }, 1400);
   });
 
@@ -572,7 +576,7 @@
           const who = r.from ? '<b>'+esc(r.from)+'</b>: ' : '';
           return '<li>'+who+esc(r.text)+'</li>';
         }).join('')
-      : '<li class="empty">{{.NoRequests}}</li>';
+      : '<li class="empty">'+T.ui_no_requests+'</li>';
     const rb = $('req-badge'); rb.hidden = rs.length===0; rb.textContent = rs.length;
 
     startedAt = j.startedAt ? Date.parse(j.startedAt) : null;
@@ -585,7 +589,7 @@
     const h = j.history||[];
     $('history-list').innerHTML = h.length
       ? h.slice(0,8).map(t=>'<li>'+esc(t.title)+(t.artist?(' — '+esc(t.artist)):'')+'</li>').join('')
-      : '<li class="empty">{{.NothingPlayed}}</li>';
+      : '<li class="empty">'+T.ui_nothing_played+'</li>';
 
     if(c.title && c.title !== coverTitle){ coverTitle = c.title; loadCover(); }
     updateMediaMeta();
@@ -598,14 +602,12 @@
 
   async function refreshDJLog(){
     try{
-      const txt = await fetch('/dj-log').then(r=>r.text());
-      const lines = txt.trim().split('\n').filter(Boolean);
+      const entries = await fetch('/dj-log').then(r=>r.json());
       const pre = $('djlog-body');
-      if(!lines.length){ pre.innerHTML = '<span class="empty">{{.NoDJLog}}</span>'; return; }
-      pre.innerHTML = lines.reverse().slice(0,120).map(ln=>{
-        const m = ln.match(/^(\d\d:\d\d:\d\d)\s*\[(DJ|PEDIDO|HORA)\]\s*(.*)$/);
-        if(!m) return esc(ln);
-        return esc(m[1])+' <b>['+m[2]+']</b> '+esc(m[3]);
+      if(!entries.length){ pre.innerHTML = '<span class="empty">'+T.ui_no_djlog+'</span>'; return; }
+      pre.innerHTML = entries.reverse().slice(0,120).map(e=>{
+        const lbl = T['log_kind_'+e.kind] || e.kind;
+        return esc(e.t)+' <b>['+lbl+']</b> '+esc(e.text);
       }).join('\n');
     }catch(_){}
   }

@@ -43,5 +43,8 @@
   "ui_aria_ffwd": "Avance rápido",
   "ui_aria_rew": "Rebobinar",
   "ui_aria_rec": "Grabar pedido",
-  "ui_hint": "Dejá tu mensaje al aire · entra en la próxima tanda"
+  "ui_hint": "Dejá tu mensaje al aire · entra en la próxima tanda",
+  "log_kind_dj": "DJ",
+  "log_kind_request": "PEDIDO",
+  "log_kind_time": "HORA"
 }

@@ -307,20 +307,17 @@ func (s *Server) ListenAndServeHTTP(port int) {
 			}
 		}
 	})
-	// /dj-log — tail of the DJ speech + request log (the radio loop writes it
-	// to dj-log.txt). Plain text, last 400 lines; the client shows newest-first.
+	// /dj-log — structured on-air feedback log (DJ speech, requests, clock).
+	// radio.logDJ appends JSONL lines to dj-log.txt; we return the parsed
+	// entries as JSON so the client renders without parsing a text format.
 	mux.HandleFunc("/dj-log", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		data, err := os.ReadFile(filepath.Join(s.dir, "dj-log.txt"))
-		if err != nil {
-			return // no log yet → empty body
+		entries := ReadDJLog(filepath.Join(s.dir, "dj-log.txt"))
+		if len(entries) > 400 {
+			entries = entries[len(entries)-400:]
 		}
-		lines := strings.Split(string(data), "\n")
-		if len(lines) > 400 {
-			lines = lines[len(lines)-400:]
-		}
-		_, _ = io.WriteString(w, strings.Join(lines, "\n"))
+		_ = json.NewEncoder(w).Encode(entries)
 	})
 	mux.HandleFunc("/font/permanent-marker.woff2", serveFont)
 	registerPWA(mux)

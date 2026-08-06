@@ -7,6 +7,7 @@
 package radio
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -48,9 +49,12 @@ func logDJ(kind, text string) {
 	if text == "" {
 		return
 	}
-	line := time.Now().Format("15:04:05") + " [" + kind + "] " + text + "\n"
+	// One JSON object per line (JSONL) — the /dj-log reader parses structured
+	// entries instead of regex-matching a human format, so kind/text with
+	// arbitrary characters can't break the parse.
+	b, _ := json.Marshal(status.DJLogEntry{T: time.Now().Format("15:04:05"), Kind: kind, Text: text})
 	if f, err := os.OpenFile(djLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
-		_, _ = f.WriteString(line)
+		_, _ = f.Write(append(b, '\n'))
 		_ = f.Close()
 	}
 }
@@ -148,7 +152,7 @@ func Serve(cfg config.Config) error {
 			st.SetCurrent(toStatus(seg.Meta), toStatus(nextTrack(segs, i)))
 			log.Printf("▶ %s — %s", seg.Meta.Title, seg.Meta.Artist)
 			if seg.Req != "" {
-				logDJ("PEDIDO", seg.Req) // air-time: the requested track starts now
+				logDJ(status.LogKindReq, seg.Req) // air-time: the requested track starts now
 			}
 			if pendingLiveTime {
 				// clock skill: generate the voice NOW so the hour isn't stale.
@@ -157,7 +161,7 @@ func Serve(cfg config.Config) error {
 				pendingLiveTime = false
 				go func() {
 					text := djx.Say(pool.Prompt("time", map[string]string{"time": time.Now().Format("15:04")}))
-					logDJ("HORA", text)
+					logDJ(status.LogKindTime, text)
 					vf, verr := vox.Speak(text)
 					if verr != nil {
 						log.Printf("[dj] time voice: %v", verr)
@@ -174,7 +178,7 @@ func Serve(cfg config.Config) error {
 				pendingVoiceText = ""
 				go func() {
 					time.Sleep(700 * time.Millisecond) // let the intro land
-					logDJ("DJ", vt) // air-time: the intro overlays the song now
+					logDJ(status.LogKindDJ, vt) // air-time: the intro overlays the song now
 					if err := streamer.Interject(vf); err != nil {
 						log.Printf("[dj] interject: %v", err)
 					}
@@ -193,7 +197,7 @@ func Serve(cfg config.Config) error {
 						return // too short for midroll
 					}
 					time.Sleep(time.Duration(dur * 0.5 * float64(time.Second)))
-					logDJ("DJ", mt)
+					logDJ(status.LogKindDJ, mt)
 					if err := streamer.Interject(mf); err != nil {
 						log.Printf("[dj] midroll interject: %v", err)
 					}
@@ -216,13 +220,13 @@ func Serve(cfg config.Config) error {
 		if pendingLiveTime {
 			go func() {
 				text := djx.Say(pool.Prompt("time", map[string]string{"time": time.Now().Format("15:04")}))
-				logDJ("HORA", text)
+				logDJ(status.LogKindTime, text)
 				if vf, verr := vox.Speak(text); verr == nil {
 					_ = streamer.Interject(vf)
 				}
 			}()
 		} else if pendingVoicePath != "" {
-			logDJ("DJ", pendingVoiceText)
+			logDJ(status.LogKindDJ, pendingVoiceText)
 			if err := streamer.Interject(pendingVoicePath); err != nil {
 				log.Printf("[dj] interject: %v", err)
 			}
