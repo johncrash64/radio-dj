@@ -101,7 +101,7 @@
   /* bloque físico de la tecla */
   .key .cap{ position:relative; height:64px; border:3px solid var(--line); background:#e9e3d4;
     box-shadow:0 6px 0 #8f8672, 0 8px 0 var(--line);
-    transition:transform .06s ease-out, box-shadow .06s ease-out;
+    transition:transform .15s cubic-bezier(.2,.85,.3,1), box-shadow .15s cubic-bezier(.2,.85,.3,1), background .15s ease-out;
     display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
     padding-top:9px; overflow:hidden; }
   /* textura de rejilla */
@@ -121,7 +121,7 @@
   .key.down .cap{ background:#ded7c6; }
   .key.k-play.down .ico,.key.k-play.down .txt{ color:#1f3a1c; }
   .key.k-rec.down  .cap{ background:#f2c9bf; }
-  .key.k-rec.down .strip{ animation:recblink .9s steps(2) infinite; }
+  .key.k-rec.down .strip{ animation:recblink 1.4s ease-in-out infinite; }
   @keyframes recblink{ 50%{ background:#7a1f16; } }
   .key.connecting .cap{ animation:keypulse 1s steps(2) infinite; }
   @keyframes keypulse{ 50%{ background:#c9bda8; } }
@@ -478,35 +478,39 @@
   kStop.onclick = ()=>{
     // Release the accumulated progressive-download buffer (currentTime is a no-op
     // on a live stream). Next play reassigns src via playStream().
+    releaseSkipKey(); // Stop pops every transport key — the cassette "chunk"
     audio.pause(); audio.removeAttribute('src'); audio.load();
     setAudioState('idle'); setRec(false);
   };
   kRec.onclick = ()=> setRec(!kRec.classList.contains('down'));
-  // cassette skip buttons: ◀◀ = previous, ▶▶ = next. Kills the in-flight
-  // decoder server-side (listeners stay connected), then reconnects the <audio>
-  // to the live edge so the user doesn't hear the buffered tail of the old song.
-  async function control(action, button){
+  // Cassette transport keys: ◀◀ = previous, ▶▶ = next. Server-side they kill
+  // the in-flight decoder (listeners stay connected). The key LATCHES down until
+  // the skip actually lands (track change via SSE) — like a real deck key staying
+  // engaged while it works — then springs back. ◀◀/▶▶ are mutually exclusive;
+  // Stop releases every transport key.
+  let engagedSkip = null; // {btn,timer} the latched skip key, or null when idle
+  function releaseSkipKey(){
+    if(!engagedSkip) return;
+    clearTimeout(engagedSkip.timer);
+    engagedSkip.btn.classList.remove('down');
+    engagedSkip.btn.disabled = false;
+    engagedSkip = null;
+  }
+  function control(action, button){
     if(button.disabled) return;
+    releaseSkipKey(); // interlock: pressing a transport key releases the other
     button.disabled = true;
     button.classList.add('down');
-    try{
-      const res = await fetch('/control', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action})
-      });
-      if(!res.ok) throw new Error(await res.text());
-      if(audioState !== 'idle'){
-        await new Promise(resolve=>setTimeout(resolve, 150));
-        audio.pause(); audio.removeAttribute('src'); audio.load();
-        audio.src = '{{.StreamPath}}?t=' + Date.now();
-        setAudioState('connecting');
-        audio.play().catch(()=> setAudioState('idle'));
-      }
-    }catch(err){
+    engagedSkip = { btn: button, timer: setTimeout(releaseSkipKey, 4000) };
+    fetch('/control', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action})
+    }).then(res=>{
+      if(!res.ok) return res.text().then(t=>{ throw new Error(t); });
+    }).catch(err=>{
       console.error('radio control failed', err);
-    }finally{
-      setTimeout(()=>{ button.disabled=false; button.classList.remove('down'); }, 900);
-    }
+      releaseSkipKey(); // 409 / network error → spring back at once
+    });
   }
   kFfwd.onclick = ()=> control('previous', kFfwd);
   kRew.onclick = ()=> control('next', kRew);
@@ -579,6 +583,7 @@
         saveState();
       }
       lastTitle = c.title;
+      releaseSkipKey(); // a latched skip key just finished its job
     }
     metaTitle = c.title||''; metaArtist = c.artist||'';
     const clip = (s,n)=> s && s.length>n ? s.slice(0,n-1).trimEnd()+'…' : (s||'');
