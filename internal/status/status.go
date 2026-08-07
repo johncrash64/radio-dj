@@ -51,15 +51,15 @@ type NowPlaying struct {
 }
 
 type Server struct {
-	mu         sync.RWMutex
-	cur        NowPlaying
-	history    []Track // recently played, newest first
-	dir        string
-	requests   []Request // raw, unresolved
-	needsSetup bool
+	mu             sync.RWMutex
+	cur            NowPlaying
+	history        []Track // recently played, newest first
+	dir            string
+	requests       []Request // raw, unresolved
+	needsSetup     bool
 	controlHandler func(string) bool // radio-loop skip callback (POST /control); nil = no radio
-	lang       string // config.Language ("es"|"en") — drives the index UI strings
-	mount      string // icecast mount (e.g. /stream.aac) — drives reverse proxy + <audio> src
+	lang           string            // config.Language ("es"|"en") — drives the index UI strings
+	mount          string            // icecast mount (e.g. /stream.aac) — drives reverse proxy + <audio> src
 	// icecast admin API for listener counts (lazy, cached 3s)
 	icBase      string
 	icPw        string

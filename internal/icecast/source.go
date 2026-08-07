@@ -27,15 +27,15 @@ const chunkBytes = 17640
 // Streamer holds the persistent master + the two pipe write ends. The voice
 // pipe is owned by a feeder goroutine that paces silence/voice at real-time.
 type Streamer struct {
-	master *exec.Cmd
-	w      *os.File // music PCM (fd 3)
-	vw     *os.File // voice PCM (fd 4)
-	voiceQ chan []byte
-	done   chan struct{}
-	mu       sync.Mutex // guards vw writes
+	master    *exec.Cmd
+	w         *os.File // music PCM (fd 3)
+	vw        *os.File // voice PCM (fd 4)
+	voiceQ    chan []byte
+	done      chan struct{}
+	mu        sync.Mutex // guards vw writes
 	decoderMu sync.Mutex // guards decoder
-	decoder  *exec.Cmd  // in-flight music decoder, nil between songs
-	ffmpeg   string     // resolved ffmpeg binary (launchd has a minimal PATH)
+	decoder   *exec.Cmd  // in-flight music decoder, nil between songs
+	ffmpeg    string     // resolved ffmpeg binary (launchd has a minimal PATH)
 }
 
 // OpenStreamer starts the master with the ducking filtergraph. Both inputs are
