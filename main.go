@@ -17,6 +17,12 @@ import (
 	"radio-dj/internal/radio"
 )
 
+// version is stamped at build time by scripts/build-release.sh via
+// -ldflags "-X main.version=<tag>". Builds that skip it (make build, go build,
+// go run) report "dev" — the linker silently drops -X for a symbol that
+// doesn't exist, so this var is what makes the release stamp real.
+var version = "dev"
+
 func main() {
 	cfg := config.Load()
 	if len(os.Args) < 2 {
@@ -45,6 +51,8 @@ func main() {
 		// Deferred: decide jarasch (yt-dlp engine) vs a built-in downloader.
 		fmt.Println("download: TBD — pending jarasch vs radio-dj decision")
 		os.Exit(0)
+	case "version", "--version", "-v":
+		fmt.Printf("radio-dj %s\n", version)
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -63,6 +71,7 @@ commands:
   download <url>     (stub) fetch new music
   install            always-on service (macOS launchd · Linux systemd/OpenRC)
   uninstall          remove the always-on service
+  version            print the build version
 
 config (three layers, lowest wins):
   env RDJ_*  >  ~/.radio-dj/config.json  >  defaults

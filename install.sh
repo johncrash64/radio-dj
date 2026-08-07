@@ -72,19 +72,54 @@ install_deps() {
   fi
 }
 
-# --- 2. binary: prefer prebuilt release, fall back to go install ---
+# --- 2. binary: prefer prebuilt release, fall back to building from source ---
+
+# GitHub serves the floating "latest" and a pinned tag from different URL
+# shapes:  latest → /releases/latest/download/<asset>
+#          v0.5.0 → /releases/download/v0.5.0/<asset>
+# Building the pinned form the "latest" way 404s, which is why RDJ_VERSION
+# always fell through to the source build.
+release_url() {
+  if [ "$VERSION" = "latest" ]; then
+    echo "https://github.com/$REPO/releases/latest/download/radio-dj-$OS-$ARCH"
+  else
+    echo "https://github.com/$REPO/releases/download/$VERSION/radio-dj-$OS-$ARCH"
+  fi
+}
+
+# go.mod declares `module radio-dj`, not the GitHub path, so
+# `go install github.com/$REPO@...` fails with a module path mismatch. Clone
+# and build instead — same result, and it stamps main.version the way the
+# release binaries do.
+build_from_source() {
+  command -v go  >/dev/null || die "Go not found — install it from https://go.dev/dl/, then re-run"
+  command -v git >/dev/null || die "git not found — install it, then re-run"
+  local src; src="$(mktemp -d)"
+  if [ "$VERSION" = "latest" ]; then
+    git clone --depth 1 -q "https://github.com/$REPO" "$src"
+  else
+    git clone --depth 1 -q --branch "$VERSION" "https://github.com/$REPO" "$src" \
+      || { rm -rf "$src"; die "no such tag or branch: $VERSION"; }
+  fi
+  local stamp; stamp="$(git -C "$src" describe --tags --always 2>/dev/null || echo "$VERSION")"
+  ( cd "$src" && go build -trimpath -ldflags="-s -w -X main.version=$stamp" -o "$INSTALL_DIR/radio-dj" . ) \
+    || { rm -rf "$src"; die "build failed"; }
+  rm -rf "$src"
+}
+
 install_binary() {
   mkdir -p "$INSTALL_DIR"
-  local url="https://github.com/$REPO/releases/${VERSION}/download/radio-dj-$OS-$ARCH"
+  local url; url="$(release_url)"
   say "trying prebuilt binary: $url"
-  if curl -fsSL "$url" -o /tmp/radio-dj-bin; then
-    install -m 0755 /tmp/radio-dj-bin "$INSTALL_DIR/radio-dj"
-    rm -f /tmp/radio-dj-bin
+  local tmp; tmp="$(mktemp)"
+  if curl -fsSL "$url" -o "$tmp"; then
+    install -m 0755 "$tmp" "$INSTALL_DIR/radio-dj"
+    rm -f "$tmp"
     green "binary installed"
   else
+    rm -f "$tmp"
     say "no prebuilt binary — building from source"
-    command -v go >/dev/null || die "Go not found — install it from https://go.dev/dl/, then re-run"
-    GOBIN="$INSTALL_DIR" go install "github.com/$REPO@${VERSION}"
+    build_from_source
     green "built and installed"
   fi
 }
