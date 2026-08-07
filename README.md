@@ -160,7 +160,7 @@ Simple HTTP — works with any client (mobile app, Home Assistant, PanelHUD):
 |---|---|---|
 | `GET` | `/now-playing` | current + next track, requests, status |
 | `POST` | `/request` | `{"from":"María","text":"Bohemian Rhapsody"}` — request a song |
-| `POST` | `/control` | `{"action":"next\|"previous"}` — skip/replay the current track (shared broadcast) |
+| `POST` | `/control` | `{"action":"next"}` or `{"action":"previous"}` — skip/replay the current track (shared broadcast) |
 | `GET` | `/stream.aac` | the audio stream (Icecast) |
 | `GET` | `/listen.pls` · `/listen.m3u` | playlist for Sonos/VLC/car |
 | `GET` | `/health` | liveness |

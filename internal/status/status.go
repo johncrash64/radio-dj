@@ -81,17 +81,28 @@ func (s *Server) SetLanguage(lang string) {
 // SetControlHandler wires the radio loop's skip callback. POST /control
 // forwards "previous"/"next" here; the handler kills the in-flight decoder
 // and advances to the chosen track. nil handler → 409 (no track playing).
+//
+// Guarded by mu: the radio loop wires this only once the streamer is up, which
+// is seconds after ListenAndServeHTTP already started serving — so a /control
+// request can genuinely land mid-write.
 func (s *Server) SetControlHandler(h func(string) bool) {
+	s.mu.Lock()
 	s.controlHandler = h
+	s.mu.Unlock()
 }
 
 // requestControl forwards a control action to the radio loop. Returns whether
 // a track was on air (accepted).
 func (s *Server) requestControl(action string) bool {
-	if s.controlHandler == nil {
+	s.mu.RLock()
+	h := s.controlHandler
+	s.mu.RUnlock()
+	if h == nil {
 		return false
 	}
-	return s.controlHandler(action)
+	// Called outside mu on purpose: the handler blocks on the radio loop's own
+	// mutex, and holding mu here would stall every SetCurrent/broadcast behind it.
+	return h(action)
 }
 
 // SetCurrent publishes the current + next track (called by the radio loop as

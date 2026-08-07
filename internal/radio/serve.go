@@ -251,8 +251,15 @@ func Serve(cfg config.Config) error {
 			previousTrack = &played
 			if !streamer.Alive() {
 				log.Printf("[radio-dj] master caído — reabriendo source")
+				// The control handler closure reads `streamer` from the HTTP
+				// goroutine, so the swap must be serialized against it — hold
+				// controlMu across close+reopen. Both are fork/exec-bound (ffmpeg
+				// connects to Icecast on its own), so a concurrent /control waits
+				// milliseconds, and then sees the fresh source.
+				controlMu.Lock()
 				streamer.Close()
 				streamer, err = icecast.OpenStreamer(cfg.IcecastHost, cfg.IcecastPort, cfg.IcecastMount, cfg.Encoder, srcPw, cfg.StationName, cfg.Bitrate)
+				controlMu.Unlock()
 				if err != nil {
 					log.Printf("[radio-dj] reopen failed: %v — retry 5s", err)
 					time.Sleep(5 * time.Second)

@@ -164,6 +164,11 @@ func (s *Streamer) Play(segment string) error {
 // radio loop advances to the next/previous track. Returns false when no
 // decoder is active (nothing to skip).
 func (s *Streamer) SkipCurrent() bool {
+	// nil receiver: a failed reopen leaves the loop's streamer nil, and this is
+	// the one method reachable from an HTTP goroutine — never panic a request.
+	if s == nil {
+		return false
+	}
 	s.decoderMu.Lock()
 	defer s.decoderMu.Unlock()
 	if s.decoder == nil || s.decoder.Process == nil {
